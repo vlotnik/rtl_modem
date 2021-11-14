@@ -2,7 +2,7 @@
 -- Author : Vitaly Lotnik
 -- Name : sin_cos_table
 -- Created : 23/05/2019
--- v. 0.0.0
+-- v. 1.0.0
 ----------------------------------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -18,19 +18,20 @@ library ieee;
 ----------------------------------------------------------------------------------------------------------------------------------
 entity sin_cos_table is
     generic(
-          g_full_table              : boolean := false
-        ; g_phase_w                 : integer := 12
-        ; g_sincos_w                : integer := 16
+          g_full_table                  : boolean := false
+        ; g_phase_w                     : integer := 12
+        ; g_sincos_w                    : integer := 16
+        ; g_pipe_ce                     : boolean := false
     );
     port(
-          iCLK                      : in std_logic
-        ; iV                        : in std_logic
-        ; iPHASE                    : in unsigned(g_phase_w - 1 downto 0)
-        ; oV                        : out std_logic
-        ; oSIN                      : out signed(g_sincos_w - 1 downto 0)
-        ; oCOS                      : out signed(g_sincos_w - 1 downto 0)
+          iCLK                          : in std_logic
+        ; iV                            : in std_logic
+        ; iPHASE                        : in unsigned(g_phase_w - 1 downto 0)
+        ; oV                            : out std_logic
+        ; oSIN                          : out signed(g_sincos_w - 1 downto 0)
+        ; oCOS                          : out signed(g_sincos_w - 1 downto 0)
     );
-end entity;
+end;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- architecture declaration
@@ -56,8 +57,7 @@ architecture behavioral of sin_cos_table is
 ----------------------------------------------------------------------------------------------------------------------------------
 -- RAM initialization
 ----------------------------------------------------------------------------------------------------------------------------------
-    type t_sincos_table is array (0 to 2 ** c_table_width - 1)
-        of signed(g_sincos_w - 1 downto 0);
+    type t_sincos_table is array (0 to 2 ** c_table_width - 1) of signed(g_sincos_w - 1 downto 0);
 
     function f_get_sincos_table (sin : in boolean) return t_sincos_table is
         variable v_sincos_table : t_sincos_table;
@@ -71,14 +71,10 @@ architecture behavioral of sin_cos_table is
         for a in 0 to 2 ** c_table_width - 1 loop
             if sin then
                 -- fill sin table
-                v_sincos_real := round(v_max_value *
-                    ieee.math_real.sin(v_phase * ieee.math_real.MATH_PI * 0.5)
-                );
+                v_sincos_real := round(v_max_value * ieee.math_real.sin(v_phase * ieee.math_real.math_pi * 0.5));
             else
                 -- fill cos table
-                v_sincos_real := round(v_max_value *
-                    ieee.math_real.cos(v_phase * ieee.math_real.MATH_PI * 0.5)
-                );
+                v_sincos_real := round(v_max_value * ieee.math_real.cos(v_phase * ieee.math_real.math_pi * 0.5));
             end if;
             v_sincos_int := integer(v_sincos_real);
             v_sincos_table(a) := to_signed(v_sincos_int, g_sincos_w);
@@ -125,14 +121,20 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- input
 ----------------------------------------------------------------------------------------------------------------------------------
-    ib_v                            <= iV;
-    ib_phase                        <= iPHASE;
+    ib_v                                <= iV;
+    ib_phase                            <= iPHASE;
 
-    pipe_v(0)                       <= ib_v;
-    pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)             when rising_edge(iCLK);
+    GEN_solid_v : if g_pipe_ce = false generate
+        pipe_v                          <= (others => ib_v);
+    end generate;
 
-    sinadr                          <= ib_phase(c_table_width - 1 downto 0);
-    cosadr                          <= ib_phase(c_table_width - 1 downto 0);
+    GEN_pipe_v : if g_pipe_ce = true generate
+        pipe_v(0)                       <= ib_v;
+        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iCLK);
+    end generate;
+
+    sinadr                              <= ib_phase(c_table_width - 1 downto 0);
+    cosadr                              <= ib_phase(c_table_width - 1 downto 0);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- process, main
@@ -180,17 +182,14 @@ begin
         end if;
     end process;
 
-    ob_v                            <= pipe_v(3);
+    ob_v                                <= pipe_v(3);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
-    oV                              <= ob_v;
-    oSIN                            <= ob_sin;
-    oCOS                            <= ob_cos;
+    oV                                  <= ob_v;
+    oSIN                                <= ob_sin;
+    oCOS                                <= ob_cos;
 
-----------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------
 end;
