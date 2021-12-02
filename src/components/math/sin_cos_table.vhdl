@@ -1,8 +1,19 @@
 ----------------------------------------------------------------------------------------------------------------------------------
--- Author : Vitaly Lotnik
--- Name : sin_cos_table
--- Created : 23/05/2019
--- v. 1.1.0
+-- author : vitaly lotnik
+-- name : sin_cos_table
+-- created : 23/05/2019
+-- v. 2.0.0
+
+-- raxi interface:
+
+-- g_raxi_dwi                           idata
+--      g_phase_w                           phase
+--      g_gpdw                              gp
+
+-- g_raxi_dwo                           odata
+--      g_sincos_w                          sin
+--      g_sincos_w                          cos
+--      g_gpdw                              gp
 ----------------------------------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -34,21 +45,20 @@ library rtl_modem;
 ----------------------------------------------------------------------------------------------------------------------------------
 entity sin_cos_table is
     generic(
-          g_gpdw                        : integer := 10
+          g_raxi_dwi                    : integer := 22
+        ; g_raxi_dwo                    : integer := 42
+        ; g_gpdw                        : integer := 10
         ; g_full_table                  : boolean := false
         ; g_phase_w                     : integer := 12
         ; g_sincos_w                    : integer := 16
         ; g_pipe_ce                     : boolean := false
     );
     port(
-          iCLK                          : in std_logic
-        ; iV                            : in std_logic
-        ; iGP                           : in std_logic_vector(g_gpdw - 1 downto 0)
-        ; iPHASE                        : in unsigned(g_phase_w - 1 downto 0)
-        ; oV                            : out std_logic
-        ; oGP                           : out std_logic_vector(g_gpdw - 1 downto 0)
-        ; oSIN                          : out signed(g_sincos_w - 1 downto 0)
-        ; oCOS                          : out signed(g_sincos_w - 1 downto 0)
+          iclk                          : in std_logic
+        ; ivalid                        : in std_logic
+        ; idata                         : in std_logic_vector(g_raxi_dwi - 1 downto 0)
+        ; ovalid                        : out std_logic
+        ; odata                         : out std_logic_vector(g_raxi_dwo - 1 downto 0)
     );
 end;
 
@@ -80,7 +90,7 @@ architecture behavioral of sin_cos_table is
     type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gpdw - 1 downto 0);
 
 ----------------------------------------------------------------------------------------------------------------------------------
--- RAM initialization
+-- ram initialization
 ----------------------------------------------------------------------------------------------------------------------------------
     type t_sincos_table is array (0 to 2 ** c_table_width - 1) of signed(g_sincos_w - 1 downto 0);
 
@@ -91,7 +101,7 @@ architecture behavioral of sin_cos_table is
         variable v_max_value : real := real(2 ** (g_sincos_w - 1) - 1);
         variable v_sincos_real : real;
         variable v_sincos_int : integer;
-        constant v_pi : real := ieee.math_real.MATH_PI;
+        constant v_pi : real := ieee.math_real.math_pi;
     begin
         for a in 0 to 2 ** c_table_width - 1 loop
             if sin then
@@ -149,19 +159,19 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- input
 ----------------------------------------------------------------------------------------------------------------------------------
-    ib_v                                <= iV;
-    ib_phase                            <= iPHASE;
-    ib_gp                               <= iGP;
+    ib_v                                <= ivalid;
+    ib_phase                            <= unsigned(idata(g_phase_w - 1 downto 0));
+    ib_gp                               <= idata(g_gpdw + g_phase_w - 1 downto g_phase_w);
 
-    GEN_solid_v : if g_pipe_ce = false generate
+    gen_solid_v : if g_pipe_ce = false generate
         pipe_v                          <= (others => ib_v);
-        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK) and ib_v = '1';
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iclk) and ib_v = '1';
     end generate;
 
-    GEN_pipe_v : if g_pipe_ce = true generate
+    gen_pipe_v : if g_pipe_ce = true generate
         pipe_v(0)                       <= ib_v;
-        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iCLK);
-        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK);
+        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iclk);
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iclk);
     end generate;
 
     ob_gp                               <= pipe_gp(c_latency - 1);
@@ -172,9 +182,9 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- process, main
 ----------------------------------------------------------------------------------------------------------------------------------
-    p_main : process(iCLK)
+    p_main : process(iclk)
     begin
-        if rising_edge(iCLK) then
+        if rising_edge(iclk) then
             if pipe_v(0) = '1' then
                 -- get quadrant
                 quad <= ib_phase(g_phase_w - 1 downto g_phase_w - 2);
@@ -220,10 +230,11 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
-    oV                                  <= ob_v;
-    oGP                                 <= ob_gp;
-    oSIN                                <= ob_sin;
-    oCOS                                <= ob_cos;
+    ovalid                              <= ob_v;
+    odata                               <=
+          ob_gp
+        & std_logic_vector(ob_cos)
+        & std_logic_vector(ob_sin);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 end;
