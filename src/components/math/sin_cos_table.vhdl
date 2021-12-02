@@ -2,8 +2,21 @@
 -- Author : Vitaly Lotnik
 -- Name : sin_cos_table
 -- Created : 23/05/2019
--- v. 1.0.0
+-- v. 1.1.0
 ----------------------------------------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------------------------------------
+-- libraries
+----------------------------------------------------------------------------------------------------------------------------------
+library ieee;
+    use ieee.std_logic_1164.all;
+
+----------------------------------------------------------------------------------------------------------------------------------
+--package declaration
+----------------------------------------------------------------------------------------------------------------------------------
+package sin_cos_table_pkg is
+    constant c_total_latency : integer := 3;
+end;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- libraries
@@ -13,12 +26,16 @@ library ieee;
     use ieee.numeric_std.all;
     use ieee.math_real.all;
 
+library rtl_modem;
+    use rtl_modem.sin_cos_table_pkg.all;
+
 ----------------------------------------------------------------------------------------------------------------------------------
 -- entity declaration
 ----------------------------------------------------------------------------------------------------------------------------------
 entity sin_cos_table is
     generic(
-          g_full_table                  : boolean := false
+          g_gpdw                        : integer := 10
+        ; g_full_table                  : boolean := false
         ; g_phase_w                     : integer := 12
         ; g_sincos_w                    : integer := 16
         ; g_pipe_ce                     : boolean := false
@@ -26,8 +43,10 @@ entity sin_cos_table is
     port(
           iCLK                          : in std_logic
         ; iV                            : in std_logic
+        ; iGP                           : in std_logic_vector(g_gpdw - 1 downto 0)
         ; iPHASE                        : in unsigned(g_phase_w - 1 downto 0)
         ; oV                            : out std_logic
+        ; oGP                           : out std_logic_vector(g_gpdw - 1 downto 0)
         ; oSIN                          : out signed(g_sincos_w - 1 downto 0)
         ; oCOS                          : out signed(g_sincos_w - 1 downto 0)
     );
@@ -52,7 +71,13 @@ architecture behavioral of sin_cos_table is
 ----------------------------------------------------------------------------------------------------------------------------------
 -- constants declaration
 ----------------------------------------------------------------------------------------------------------------------------------
+    constant c_latency : integer := rtl_modem.sin_cos_table_pkg.c_total_latency;
     constant c_table_width : integer := f_get_table_width;
+
+----------------------------------------------------------------------------------------------------------------------------------
+-- types declaration
+----------------------------------------------------------------------------------------------------------------------------------
+    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gpdw - 1 downto 0);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- RAM initialization
@@ -93,8 +118,10 @@ architecture behavioral of sin_cos_table is
     -- input buffers
     signal ib_v : std_logic := '0';
     signal ib_phase : unsigned(g_phase_w - 1 downto 0) := (others => '0');
+    signal ib_gp :std_logic_vector(g_gpdw - 1 downto 0) := (others => '0');
 
-    signal pipe_v : std_logic_vector(0 to 3) := (others => '0');
+    signal pipe_v : std_logic_vector(0 to c_latency) := (others => '0');
+    signal pipe_gp : t_pipe_gp(0 to c_latency) := (others => (others => '0'));
 
     signal
           quad                                              -- quadrant
@@ -114,6 +141,7 @@ architecture behavioral of sin_cos_table is
 
     -- output buffers
     signal ob_v : std_logic := '0';
+    signal ob_gp :std_logic_vector(g_gpdw - 1 downto 0) := (others => '0');
     signal ob_sin : signed(g_sincos_w - 1 downto 0) := (others => '0');
     signal ob_cos : signed(g_sincos_w - 1 downto 0) := (others => '0');
 
@@ -123,15 +151,20 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
     ib_v                                <= iV;
     ib_phase                            <= iPHASE;
+    ib_gp                               <= iGP;
 
     GEN_solid_v : if g_pipe_ce = false generate
         pipe_v                          <= (others => ib_v);
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK) and ib_v = '1';
     end generate;
 
     GEN_pipe_v : if g_pipe_ce = true generate
         pipe_v(0)                       <= ib_v;
         pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iCLK);
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK);
     end generate;
+
+    ob_gp                               <= pipe_gp(c_latency - 1);
 
     sinadr                              <= ib_phase(c_table_width - 1 downto 0);
     cosadr                              <= ib_phase(c_table_width - 1 downto 0);
@@ -182,12 +215,13 @@ begin
         end if;
     end process;
 
-    ob_v                                <= pipe_v(3);
+    ob_v                                <= pipe_v(c_latency);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
     oV                                  <= ob_v;
+    oGP                                 <= ob_gp;
     oSIN                                <= ob_sin;
     oCOS                                <= ob_cos;
 
