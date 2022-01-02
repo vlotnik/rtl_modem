@@ -2,11 +2,11 @@
 -- author : vitaly lotnik
 -- name : simple_fir_filter
 -- created : 12/12/2021
--- v. 0.0.0
+-- v. 0.1.0
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, coef, input:
--- 16                                   icoef_data
---      16                                  coefficient
+-- g_iraxi_coef_dw                      icoef_data
+--      g_coef_dw                           coefficient
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, data, input:
 -- g_iraxi_dw                           idata
@@ -30,7 +30,9 @@ library ieee;
 entity simple_fir_filter is
     generic(
           g_nof_taps                    : integer := 32
+        ; g_coef_dw                     : integer := 16
         ; g_sample_dw                   : integer := 12
+        ; g_iraxi_coef_dw               : integer := 16
         ; g_iraxi_dw                    : integer := 12
         ; g_oraxi_dw                    : integer := 48
     );
@@ -38,7 +40,7 @@ entity simple_fir_filter is
           iclk                          : in std_logic
         ; icoef_rst                     : in std_logic
         ; icoef_valid                   : in std_logic
-        ; icoef_data                    : in std_logic_vector(15 downto 0)
+        ; icoef_data                    : in std_logic_vector(g_iraxi_coef_dw - 1 downto 0)
         ; ivalid                        : in std_logic
         ; idata                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
         ; ovalid                        : out std_logic
@@ -53,16 +55,12 @@ architecture behavioral of simple_fir_filter is
 ----------------------------------------------------------------------------------------------------------------------------------
 -- constants declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-    constant c_mreg_dw : integer := g_sample_dw + 16;
-
-----------------------------------------------------------------------------------------------------------------------------------
--- components declaration
-----------------------------------------------------------------------------------------------------------------------------------
+    constant c_mreg_dw : integer := g_sample_dw + g_coef_dw;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- types declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-    type t_signed16array is array (natural range <>) of signed(15 downto 0);
+    type t_coef_array is array (natural range <>) of signed(g_coef_dw - 1 downto 0);
     type t_data_array is array (natural range <>) of signed(g_sample_dw - 1 downto 0);
     type t_mreg_array is array (natural range <>) of signed(c_mreg_dw - 1 downto 0);
     type t_signed48array is array (natural range <>) of signed(47 downto 0);
@@ -73,12 +71,12 @@ architecture behavioral of simple_fir_filter is
     -- input buffers
     signal ib_coef_rst : std_logic := '0';
     signal ib_coef_valid : std_logic := '0';
-    signal ib_coef_data : signed(15 downto 0) := (others => '0');
+    signal ib_coef_data : signed(g_coef_dw - 1 downto 0) := (others => '0');
     signal ib_valid : std_logic := '0';
     signal ib_data : signed(g_sample_dw - 1 downto 0) := (others => '0');
 
     -- coefs
-    signal coefs_array : t_signed16array(0 to g_nof_taps - 1) := (others => (others => '0'));
+    signal coefs_array : t_coef_array(0 to g_nof_taps - 1) := (others => (others => '0'));
 
     -- fir
     signal fir_areg1 : t_data_array(0 to g_nof_taps - 1) := (others => (others => '0'));
