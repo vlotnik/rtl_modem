@@ -2,7 +2,7 @@
 -- author : vitaly lotnik
 -- name : simple_fir_filter
 -- created : 12/12/2021
--- v. 0.1.0
+-- v. 0.1.1
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, coef, input:
 -- g_iraxi_coef_dw                      icoef_data
@@ -81,6 +81,7 @@ architecture behavioral of simple_fir_filter is
     -- fir
     signal fir_areg1 : t_data_array(0 to g_nof_taps - 1) := (others => (others => '0'));
     signal fir_areg2 : t_data_array(0 to g_nof_taps - 1) := (others => (others => '0'));
+    signal fir_breg : t_coef_array(0 to g_nof_taps - 1) := (others => (others => '0'));
     signal fir_mreg : t_mreg_array(0 to g_nof_taps - 1) := (others => (others => '0'));
     signal fir_preg : t_signed48array(0 to g_nof_taps - 1) := (others => (others => '0'));
 
@@ -120,6 +121,8 @@ begin
     p_fir : process(iclk)
     begin
         if rising_edge(iclk) then
+            fir_breg <= coefs_array;
+
             if ib_valid = '1' then
                 for a in 0 to g_nof_taps - 1 loop
                     if a = 0 then
@@ -129,7 +132,7 @@ begin
                     end if;
                     fir_areg2(a) <= fir_areg1(a);
 
-                    fir_mreg(a) <= fir_areg2(a) * coefs_array(a);
+                    fir_mreg(a) <= fir_areg2(a) * fir_breg(a);
 
                     if a = 0 then
                         fir_preg(a) <= resize(fir_mreg(a), 48);
