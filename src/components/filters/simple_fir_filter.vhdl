@@ -2,10 +2,10 @@
 -- author : vitaly lotnik
 -- name : simple_fir_filter
 -- created : 12/12/2021
--- v. 0.1.1
+-- v. 0.1.2
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, coef, input:
--- g_iraxi_coef_dw                      icoef_data
+-- g_iraxi_dw_coef                      icoef_data
 --      g_coef_dw                           coefficient
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, data, input:
@@ -32,7 +32,7 @@ entity simple_fir_filter is
           g_nof_taps                    : integer := 32
         ; g_coef_dw                     : integer := 16
         ; g_sample_dw                   : integer := 12
-        ; g_iraxi_coef_dw               : integer := 16
+        ; g_iraxi_dw_coef               : integer := 16
         ; g_iraxi_dw                    : integer := 12
         ; g_oraxi_dw                    : integer := 48
     );
@@ -40,7 +40,7 @@ entity simple_fir_filter is
           iclk                          : in std_logic
         ; icoef_rst                     : in std_logic
         ; icoef_valid                   : in std_logic
-        ; icoef_data                    : in std_logic_vector(g_iraxi_coef_dw - 1 downto 0)
+        ; icoef_data                    : in std_logic_vector(g_iraxi_dw_coef - 1 downto 0)
         ; ivalid                        : in std_logic
         ; idata                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
         ; ovalid                        : out std_logic
