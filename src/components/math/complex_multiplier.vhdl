@@ -2,15 +2,27 @@
 -- Author : Vitaly Lotnik
 -- Name : complex_multiplier
 -- Created : 23/05/2021
--- v. 1.1.0
+-- v. 2.0.0
 
--- (A + ai) * (B + bi) = C + ci
--- A ~ iA.i
--- a ~ iA.q
--- B ~ iB.i
--- b ~ iB.q
--- C ~ iC.i
--- c ~ iC.q
+-- g_conj_mult = false : C_re + C_im = (A_re * B_re - A_im * B_im) + j (A_im * B_re + A_re * B_im)
+-- g_conj_mult = true  : C_re + C_im = (A_re * B_re + A_im * B_im) + j (A_im * B_re - A_re * B_im)
+
+----------------------------------------------------------------------------------------------------------------------------------
+-- raxi interface, input:
+-- g_iraxi_dw                           idata
+--      g_a_w                               A_re
+--      g_a_w                               A_im
+--      g_b_w                               B_re
+--      g_b_w                               B_im
+--      g_gp_w                              gp
+--          g_gp_w + g_a_w*2 + g_b_w*2
+----------------------------------------------------------------------------------------------------------------------------------
+-- raxi interface, output:
+-- g_oraxi_dw                           odata
+--      g_a_w + g_b_w + 1                   C_re
+--      g_a_w + g_b_w + 1                   C_im
+--      g_gp_w                              gp
+--          g_gp_w + (g_a_w + g_b_w + 1)*2
 ----------------------------------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -42,22 +54,21 @@ library rtl_modem;
 ----------------------------------------------------------------------------------------------------------------------------------
 entity complex_multiplier is
     generic(
-          g_gpdw                        : integer := 10
+          g_gp_w                        : integer := 10
         ; g_a_w                         : integer := 25
         ; g_b_w                         : integer := 18
         ; g_type                        : integer := 0
         ; g_conj_mult                   : boolean := false
         ; g_pipe_ce                     : boolean := false
+        ; g_iraxi_dw                    : integer := 10 + 25*2 + 18*2
+        ; g_oraxi_dw                    : integer := 10 + (25 + 18 + 1)*2
     );
     port(
-          iCLK                          : in std_logic
-        ; iV                            : in std_logic
-        ; iGP                           : in std_logic_vector(g_gpdw - 1 downto 0)
-        ; iA                            : in t_iq
-        ; iB                            : in t_iq
-        ; oV                            : out std_logic
-        ; oGP                           : out std_logic_vector(g_gpdw - 1 downto 0)
-        ; oC                            : out t_iq
+          iclk                          : in std_logic
+        ; ivalid                        : in std_logic
+        ; idata                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
+        ; ovalid                        : out std_logic
+        ; odata                         : out std_logic_vector(g_oraxi_dw - 1 downto 0)
     );
 end;
 
@@ -68,20 +79,31 @@ architecture behavioral of complex_multiplier is
 ----------------------------------------------------------------------------------------------------------------------------------
 -- constants declaration
 ----------------------------------------------------------------------------------------------------------------------------------
+    constant lsb_i_are : integer := 0;
+    constant msb_i_are : integer := g_a_w - 1;
+    constant lsb_i_aim : integer := g_a_w;
+    constant msb_i_aim : integer := g_a_w*2 - 1;
+    constant lsb_i_bre : integer := g_a_w*2;
+    constant msb_i_bre : integer := g_a_w*2 + g_b_w - 1;
+    constant lsb_i_bim : integer := g_a_w*2 + g_b_w;
+    constant msb_i_bim : integer := g_a_w*2 + g_b_w*2 - 1;
+    constant lsb_i_gp  : integer := g_a_w*2 + g_b_w*2;
+    constant msb_i_gp  : integer := g_a_w*2 + g_b_w*2 + g_gp_w - 1;
+
     constant c_latency : integer := rtl_modem.complex_multiplier_pkg.c_total_latency;
     constant c_c_w : integer := g_a_w + g_b_w + 1;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- types declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gpdw - 1 downto 0);
+    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gp_w - 1 downto 0);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- signals declaration
 ----------------------------------------------------------------------------------------------------------------------------------
     -- input buffers
     signal ib_v : std_logic := '0';
-    signal ib_gp : std_logic_vector(g_gpdw - 1 downto 0) := (others => '0');
+    signal ib_gp : std_logic_vector(g_gp_w - 1 downto 0) := (others => '0');
     signal ib_a : t_iq(i(g_a_w - 1 downto 0), q(g_a_w - 1 downto 0)) := ((others => '0'), (others => '0'));
     signal ib_b : t_iq(i(g_b_w - 1 downto 0), q(g_b_w - 1 downto 0)) := ((others => '0'), (others => '0'));
 
@@ -90,17 +112,19 @@ architecture behavioral of complex_multiplier is
 
     -- output buffers
     signal ob_v : std_logic := '0';
-    signal ob_gp : std_logic_vector(g_gpdw - 1 downto 0) := (others => '0');
+    signal ob_gp : std_logic_vector(g_gp_w - 1 downto 0) := (others => '0');
     signal ob_c : t_iq(i(c_c_w - 1 downto 0), q(c_c_w - 1 downto 0)) := ((others => '0'), (others => '0'));
 
 begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- input
 ----------------------------------------------------------------------------------------------------------------------------------
-    ib_v                                <= iV;
-    ib_gp                               <= iGP;
-    ib_a                                <= iA;
-    ib_b                                <= iB;
+    ib_v                                <= ivalid;
+    ib_a.i                              <= signed(idata(msb_i_are downto lsb_i_are));
+    ib_a.q                              <= signed(idata(msb_i_aim downto lsb_i_aim));
+    ib_b.i                              <= signed(idata(msb_i_bre downto lsb_i_bre));
+    ib_b.q                              <= signed(idata(msb_i_bim downto lsb_i_bim));
+    ib_gp                               <= idata(msb_i_gp downto lsb_i_gp);
 
     gen_solid_v : if g_pipe_ce = false generate
         pipe_v                          <= (others => ib_v);
@@ -393,9 +417,12 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
-    oV                                  <= ob_v;
-    oGP                                 <= ob_gp;
-    oC                                  <= ob_c;
+    ovalid                              <= ob_v;
+    odata                               <=
+        ob_gp &
+        std_logic_vector(ob_c.q) &
+        std_logic_vector(ob_c.i)
+    ;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 end;
