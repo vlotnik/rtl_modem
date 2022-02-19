@@ -2,18 +2,24 @@
 -- author : vitaly lotnik
 -- name : sin_cos_table
 -- created : 23/05/2019
--- v. 2.0.0
+-- v. 2.1.0
 
--- raxi interface:
+----------------------------------------------------------------------------------------------------------------------------------
+-- raxi interface, input:
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_iraxi_dw                           iDATA
+--      g_phase_dw                          phase                               [g_phase_dw - 1 : 0]
+--      g_gp_dw                             general pupose data                 [g_gp_dw + g_phase_dw - 1 : g_phase_dw]
+--          g_gp_dw + g_phase_dw
 
--- g_raxi_dwi                           idata
---      g_phase_w                           phase
---      g_gpdw                              gp
-
--- g_raxi_dwo                           odata
---      g_sincos_w                          sin
---      g_sincos_w                          cos
---      g_gpdw                              gp
+----------------------------------------------------------------------------------------------------------------------------------
+-- raxi interface, output:
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_oraxi_dw                           oDATA
+--      g_sincos_dw                         sinus                               [g_sincos_dw - 1 : 0]
+--      g_sincos_dw                         cosine                              [g_sincos_dw*2 - 1 : g_sincos_dw]
+--      g_gp_dw                             general pupose data                 [g_gp_dw + g_sincos_dw*2 - 1 : g_sincos_dw*2]
+--          g_gp_dw + g_sincos_dw*2
 ----------------------------------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -25,7 +31,7 @@ library ieee;
 ----------------------------------------------------------------------------------------------------------------------------------
 --package declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-package sin_cos_table_pkg is
+package pkg_sin_cos_table is
     constant c_total_latency : integer := 3;
 end;
 
@@ -38,27 +44,26 @@ library ieee;
     use ieee.math_real.all;
 
 library rtl_modem;
-    use rtl_modem.sin_cos_table_pkg.all;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- entity declaration
 ----------------------------------------------------------------------------------------------------------------------------------
 entity sin_cos_table is
     generic(
-          g_raxi_dwi                    : integer := 22
-        ; g_raxi_dwo                    : integer := 42
-        ; g_gpdw                        : integer := 10
+          g_gp_dw                       : integer := 10
         ; g_full_table                  : boolean := false
-        ; g_phase_w                     : integer := 12
-        ; g_sincos_w                    : integer := 16
+        ; g_phase_dw                    : integer := 12
+        ; g_sincos_dw                   : integer := 16
         ; g_pipe_ce                     : boolean := false
+        ; g_iraxi_dw                    : integer := 22
+        ; g_oraxi_dw                    : integer := 42
     );
     port(
-          iclk                          : in std_logic
-        ; ivalid                        : in std_logic
-        ; idata                         : in std_logic_vector(g_raxi_dwi - 1 downto 0)
-        ; ovalid                        : out std_logic
-        ; odata                         : out std_logic_vector(g_raxi_dwo - 1 downto 0)
+          iCLK                          : in std_logic
+        ; iVALID                        : in std_logic
+        ; iDATA                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
+        ; oVALID                        : out std_logic
+        ; oDATA                         : out std_logic_vector(g_oraxi_dw - 1 downto 0)
     );
 end;
 
@@ -72,33 +77,33 @@ architecture behavioral of sin_cos_table is
     function f_get_table_width return integer is
     begin
         if g_full_table then
-            return g_phase_w;
+            return g_phase_dw;
         else
-            return g_phase_w - 2;
+            return g_phase_dw - 2;
         end if;
     end function;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- constants declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-    constant c_latency : integer := rtl_modem.sin_cos_table_pkg.c_total_latency;
+    constant c_latency : integer := rtl_modem.pkg_sin_cos_table.c_total_latency;
     constant c_table_width : integer := f_get_table_width;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- types declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gpdw - 1 downto 0);
+    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gp_dw - 1 downto 0);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- ram initialization
 ----------------------------------------------------------------------------------------------------------------------------------
-    type t_sincos_table is array (0 to 2 ** c_table_width - 1) of signed(g_sincos_w - 1 downto 0);
+    type t_sincos_table is array (0 to 2 ** c_table_width - 1) of signed(g_sincos_dw - 1 downto 0);
 
     function f_get_sincos_table (sin : in boolean) return t_sincos_table is
         variable v_sincos_table : t_sincos_table;
         variable v_phase : real := 0.0;
-        variable v_step : real := 1.0 / real(2 ** (g_phase_w - 2));
-        variable v_max_value : real := real(2 ** (g_sincos_w - 1) - 1);
+        variable v_step : real := 1.0 / real(2 ** (g_phase_dw - 2));
+        variable v_max_value : real := real(2 ** (g_sincos_dw - 1) - 1);
         variable v_sincos_real : real;
         variable v_sincos_int : integer;
         constant v_pi : real := ieee.math_real.math_pi;
@@ -112,7 +117,7 @@ architecture behavioral of sin_cos_table is
                 v_sincos_real := round(v_max_value * ieee.math_real.cos(v_phase * ieee.math_real.math_pi * 0.5));
             end if;
             v_sincos_int := integer(v_sincos_real);
-            v_sincos_table(a) := to_signed(v_sincos_int, g_sincos_w);
+            v_sincos_table(a) := to_signed(v_sincos_int, g_sincos_dw);
             v_phase := v_phase + v_step;
         end loop;
 
@@ -127,8 +132,8 @@ architecture behavioral of sin_cos_table is
 ----------------------------------------------------------------------------------------------------------------------------------
     -- input buffers
     signal ib_v : std_logic := '0';
-    signal ib_phase : unsigned(g_phase_w - 1 downto 0) := (others => '0');
-    signal ib_gp :std_logic_vector(g_gpdw - 1 downto 0) := (others => '0');
+    signal ib_phase : unsigned(g_phase_dw - 1 downto 0) := (others => '0');
+    signal ib_gp :std_logic_vector(g_gp_dw - 1 downto 0) := (others => '0');
 
     signal pipe_v : std_logic_vector(0 to c_latency) := (others => '0');
     signal pipe_gp : t_pipe_gp(0 to c_latency) := (others => (others => '0'));
@@ -147,31 +152,31 @@ architecture behavioral of sin_cos_table is
         , int_cos                                           -- cos value got from memory
         , int_sin_d                                         -- sin value, delayd for 1 clk
         , int_cos_d                                         -- cos value, delayed for 1 clk
-            : signed(g_sincos_w - 1 downto 0) := (others => '0');
+            : signed(g_sincos_dw - 1 downto 0) := (others => '0');
 
     -- output buffers
     signal ob_v : std_logic := '0';
-    signal ob_gp :std_logic_vector(g_gpdw - 1 downto 0) := (others => '0');
-    signal ob_sin : signed(g_sincos_w - 1 downto 0) := (others => '0');
-    signal ob_cos : signed(g_sincos_w - 1 downto 0) := (others => '0');
+    signal ob_gp :std_logic_vector(g_gp_dw - 1 downto 0) := (others => '0');
+    signal ob_sin : signed(g_sincos_dw - 1 downto 0) := (others => '0');
+    signal ob_cos : signed(g_sincos_dw - 1 downto 0) := (others => '0');
 
 begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- input
 ----------------------------------------------------------------------------------------------------------------------------------
-    ib_v                                <= ivalid;
-    ib_phase                            <= unsigned(idata(g_phase_w - 1 downto 0));
-    ib_gp                               <= idata(g_gpdw + g_phase_w - 1 downto g_phase_w);
+    ib_v                                <= iVALID;
+    ib_phase                            <= unsigned(iDATA(g_phase_dw - 1 downto 0));
+    ib_gp                               <= iDATA(g_gp_dw + g_phase_dw - 1 downto g_phase_dw);
 
     gen_solid_v : if g_pipe_ce = false generate
         pipe_v                          <= (others => ib_v);
-        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iclk) and ib_v = '1';
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK) and ib_v = '1';
     end generate;
 
     gen_pipe_v : if g_pipe_ce = true generate
         pipe_v(0)                       <= ib_v;
-        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iclk);
-        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iclk);
+        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iCLK);
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK);
     end generate;
 
     ob_gp                               <= pipe_gp(c_latency - 1);
@@ -182,12 +187,12 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- process, main
 ----------------------------------------------------------------------------------------------------------------------------------
-    p_main : process(iclk)
+    p_main : process(iCLK)
     begin
-        if rising_edge(iclk) then
+        if rising_edge(iCLK) then
             if pipe_v(0) = '1' then
                 -- get quadrant
-                quad <= ib_phase(g_phase_w - 1 downto g_phase_w - 2);
+                quad <= ib_phase(g_phase_dw - 1 downto g_phase_dw - 2);
                 -- get cosine/sine from quarter table
                 int_sin <= c_sintable(to_integer(sinadr));
                 int_cos <= c_costable(to_integer(cosadr));
@@ -230,8 +235,8 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
-    ovalid                              <= ob_v;
-    odata                               <=
+    oVALID                              <= ob_v;
+    oDATA                               <=
           ob_gp
         & std_logic_vector(ob_cos)
         & std_logic_vector(ob_sin);
