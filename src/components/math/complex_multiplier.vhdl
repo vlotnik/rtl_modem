@@ -1,28 +1,30 @@
 ----------------------------------------------------------------------------------------------------------------------------------
--- Author : Vitaly Lotnik
--- Name : complex_multiplier
--- Created : 23/05/2021
--- v. 2.0.0
+-- author : vitaly lotnik
+-- name : complex_multiplier
+-- created : 23/05/2021
+-- v. 2.1.0
 
 -- g_conj_mult = false : C_re + C_im = (A_re * B_re - A_im * B_im) + j (A_im * B_re + A_re * B_im)
 -- g_conj_mult = true  : C_re + C_im = (A_re * B_re + A_im * B_im) + j (A_im * B_re - A_re * B_im)
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, input:
--- g_iraxi_dw                           idata
---      g_a_w                               A_re
---      g_a_w                               A_im
---      g_b_w                               B_re
---      g_b_w                               B_im
---      g_gp_w                              gp
---          g_gp_w + g_a_w*2 + g_b_w*2
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_iraxi_dw                           iDATA
+--      g_a_dw                              A_re                                [g_a_dw - 1 : 0]
+--      g_a_dw                              A_im                                [g_a_dw*2 - 1 : g_a_dw]
+--      g_b_dw                              B_re                                [g_b_dw + g_a_dw*2 - 1 : g_a_dw*2]
+--      g_b_dw                              B_im                                [g_b_dw*2 + g_a_dw*2 - 1 : g_b_dw + g_a_dw*2]
+--      g_gp_dw                             general purpose data                [g_gp_dw + g_a_dw*2 + g_b_dw*2 - 1 : g_b_dw*2 + g_a_dw*2]
+--          g_gp_dw + g_a_dw*2 + g_b_dw*2
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, output:
--- g_oraxi_dw                           odata
---      g_a_w + g_b_w + 1                   C_re
---      g_a_w + g_b_w + 1                   C_im
---      g_gp_w                              gp
---          g_gp_w + (g_a_w + g_b_w + 1)*2
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_oraxi_dw                           oDATA
+--      g_a_dw + g_b_dw + 1                 C_re                                [g_a_dw + g_b_dw + 1 - 1 : 0]
+--      g_a_dw + g_b_dw + 1                 C_im                                [(g_a_dw + g_b_dw + 1)*2 - 1 : g_a_dw + g_b_dw + 1]
+--      g_gp_dw                             general purpose data                [g_gp_dw + (g_a_dw + g_b_dw + 1)*2 - 1 : (g_a_dw + g_b_dw + 1)*2]
+--          g_gp_dw + (g_a_dw + g_b_dw + 1)*2
 ----------------------------------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -34,7 +36,7 @@ library ieee;
 ----------------------------------------------------------------------------------------------------------------------------------
 --package declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-package complex_multiplier_pkg is
+package pkg_complex_multiplier is
     constant c_total_latency : integer := 4;
 end;
 
@@ -47,16 +49,15 @@ library ieee;
 
 library rtl_modem;
     use rtl_modem.pkg_rtl_modem_types.all;
-    use rtl_modem.complex_multiplier_pkg.all;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- entity declaration
 ----------------------------------------------------------------------------------------------------------------------------------
 entity complex_multiplier is
     generic(
-          g_gp_w                        : integer := 10
-        ; g_a_w                         : integer := 25
-        ; g_b_w                         : integer := 18
+          g_gp_dw                       : integer := 10
+        ; g_a_dw                        : integer := 25
+        ; g_b_dw                        : integer := 18
         ; g_type                        : integer := 0
         ; g_conj_mult                   : boolean := false
         ; g_pipe_ce                     : boolean := false
@@ -64,11 +65,11 @@ entity complex_multiplier is
         ; g_oraxi_dw                    : integer := 10 + (25 + 18 + 1)*2
     );
     port(
-          iclk                          : in std_logic
-        ; ivalid                        : in std_logic
-        ; idata                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
-        ; ovalid                        : out std_logic
-        ; odata                         : out std_logic_vector(g_oraxi_dw - 1 downto 0)
+          iCLK                          : in std_logic
+        ; iVALID                        : in std_logic
+        ; iDATA                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
+        ; oVALID                        : out std_logic
+        ; oDATA                         : out std_logic_vector(g_oraxi_dw - 1 downto 0)
     );
 end;
 
@@ -80,61 +81,61 @@ architecture behavioral of complex_multiplier is
 -- constants declaration
 ----------------------------------------------------------------------------------------------------------------------------------
     constant lsb_i_are : integer := 0;
-    constant msb_i_are : integer := g_a_w - 1;
-    constant lsb_i_aim : integer := g_a_w;
-    constant msb_i_aim : integer := g_a_w*2 - 1;
-    constant lsb_i_bre : integer := g_a_w*2;
-    constant msb_i_bre : integer := g_a_w*2 + g_b_w - 1;
-    constant lsb_i_bim : integer := g_a_w*2 + g_b_w;
-    constant msb_i_bim : integer := g_a_w*2 + g_b_w*2 - 1;
-    constant lsb_i_gp  : integer := g_a_w*2 + g_b_w*2;
-    constant msb_i_gp  : integer := g_a_w*2 + g_b_w*2 + g_gp_w - 1;
+    constant msb_i_are : integer := g_a_dw - 1;
+    constant lsb_i_aim : integer := g_a_dw;
+    constant msb_i_aim : integer := g_a_dw*2 - 1;
+    constant lsb_i_bre : integer := g_a_dw*2;
+    constant msb_i_bre : integer := g_a_dw*2 + g_b_dw - 1;
+    constant lsb_i_bim : integer := g_a_dw*2 + g_b_dw;
+    constant msb_i_bim : integer := g_a_dw*2 + g_b_dw*2 - 1;
+    constant lsb_i_gp  : integer := g_a_dw*2 + g_b_dw*2;
+    constant msb_i_gp  : integer := g_a_dw*2 + g_b_dw*2 + g_gp_dw - 1;
 
-    constant c_latency : integer := rtl_modem.complex_multiplier_pkg.c_total_latency;
-    constant c_c_w : integer := g_a_w + g_b_w + 1;
+    constant c_latency : integer := rtl_modem.pkg_complex_multiplier.c_total_latency;
+    constant c_c_w : integer := g_a_dw + g_b_dw + 1;
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- types declaration
 ----------------------------------------------------------------------------------------------------------------------------------
-    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gp_w - 1 downto 0);
+    type t_pipe_gp is array (integer range <>) of std_logic_vector(g_gp_dw - 1 downto 0);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- signals declaration
 ----------------------------------------------------------------------------------------------------------------------------------
     -- input buffers
     signal ib_v : std_logic := '0';
-    signal ib_gp : std_logic_vector(g_gp_w - 1 downto 0) := (others => '0');
-    signal ib_a : t_iq(i(g_a_w - 1 downto 0), q(g_a_w - 1 downto 0)) := ((others => '0'), (others => '0'));
-    signal ib_b : t_iq(i(g_b_w - 1 downto 0), q(g_b_w - 1 downto 0)) := ((others => '0'), (others => '0'));
+    signal ib_gp : std_logic_vector(g_gp_dw - 1 downto 0) := (others => '0');
+    signal ib_a : t_iq(i(g_a_dw - 1 downto 0), q(g_a_dw - 1 downto 0)) := ((others => '0'), (others => '0'));
+    signal ib_b : t_iq(i(g_b_dw - 1 downto 0), q(g_b_dw - 1 downto 0)) := ((others => '0'), (others => '0'));
 
     signal pipe_v : std_logic_vector(0 to c_latency) := (others => '0');
     signal pipe_gp : t_pipe_gp(0 to c_latency) := (others => (others => '0'));
 
     -- output buffers
     signal ob_v : std_logic := '0';
-    signal ob_gp : std_logic_vector(g_gp_w - 1 downto 0) := (others => '0');
+    signal ob_gp : std_logic_vector(g_gp_dw - 1 downto 0) := (others => '0');
     signal ob_c : t_iq(i(c_c_w - 1 downto 0), q(c_c_w - 1 downto 0)) := ((others => '0'), (others => '0'));
 
 begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- input
 ----------------------------------------------------------------------------------------------------------------------------------
-    ib_v                                <= ivalid;
-    ib_a.i                              <= signed(idata(msb_i_are downto lsb_i_are));
-    ib_a.q                              <= signed(idata(msb_i_aim downto lsb_i_aim));
-    ib_b.i                              <= signed(idata(msb_i_bre downto lsb_i_bre));
-    ib_b.q                              <= signed(idata(msb_i_bim downto lsb_i_bim));
-    ib_gp                               <= idata(msb_i_gp downto lsb_i_gp);
+    ib_v                                <= iVALID;
+    ib_a.i                              <= signed(iDATA(msb_i_are downto lsb_i_are));
+    ib_a.q                              <= signed(iDATA(msb_i_aim downto lsb_i_aim));
+    ib_b.i                              <= signed(iDATA(msb_i_bre downto lsb_i_bre));
+    ib_b.q                              <= signed(iDATA(msb_i_bim downto lsb_i_bim));
+    ib_gp                               <= iDATA(msb_i_gp downto lsb_i_gp);
 
     gen_solid_v : if g_pipe_ce = false generate
         pipe_v                          <= (others => ib_v);
-        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iclk) and ib_v = '1';
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK) and ib_v = '1';
     end generate;
 
     gen_pipe_v : if g_pipe_ce = true generate
         pipe_v(0)                       <= ib_v;
-        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iclk);
-        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iclk);
+        pipe_v(1 to pipe_v'high)        <= pipe_v(0 to pipe_v'high - 1)         when rising_edge(iCLK);
+        pipe_gp                         <= ib_gp & pipe_gp(0 to pipe_gp'high - 1) when rising_edge(iCLK);
     end generate;
 
     ob_gp                               <= pipe_gp(c_latency - 1);
@@ -144,7 +145,7 @@ begin
 --++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     blk_type_0 : block
 ----------------------------------------------------------------------------------------------------------------------------------
-        constant c_m_w : integer := g_a_w + g_b_w;       -- multiplier
+        constant c_m_w : integer := g_a_dw + g_b_dw;       -- multiplier
 
         signal
               dsp0_areg1
@@ -153,7 +154,7 @@ begin
             , dsp3_areg1
             , dsp0_areg2
             , dsp2_areg2
-                : signed(g_a_w - 1 downto 0) := (others => '0');
+                : signed(g_a_dw - 1 downto 0) := (others => '0');
         signal
               dsp0_breg1
             , dsp1_breg1
@@ -161,7 +162,7 @@ begin
             , dsp3_breg1
             , dsp0_breg2
             , dsp2_breg2
-                : signed(g_b_w - 1 downto 0) := (others => '0');
+                : signed(g_b_dw - 1 downto 0) := (others => '0');
         signal
               dsp0_mreg
             , dsp1_mreg
@@ -202,18 +203,18 @@ begin
 
             if pipe_v(2) = '1' then
                 dsp0_mreg <= dsp0_areg2 * dsp0_breg2;                           -- A x B
-                dsp1_preg <= resize(dsp1_mreg, c_c_w);                         -- a x b
+                dsp1_preg <= resize(dsp1_mreg, c_c_w);                          -- a x b
                 dsp2_mreg <= dsp2_areg2 * dsp2_breg2;                           -- A x b
-                dsp3_preg <= resize(dsp3_mreg, c_c_w);                         -- a x B
+                dsp3_preg <= resize(dsp3_mreg, c_c_w);                          -- a x B
             end if;
 
             if pipe_v(3) = '1' then
                 if g_conj_mult = false then
-                    dsp0_preg <= resize(dsp0_mreg, c_c_w) - dsp1_preg;         -- A x B - a x b
-                    dsp2_preg <= resize(dsp2_mreg, c_c_w) + dsp3_preg;         -- A x b + a x B
+                    dsp0_preg <= resize(dsp0_mreg, c_c_w) - dsp1_preg;          -- A x B - a x b
+                    dsp2_preg <= resize(dsp2_mreg, c_c_w) + dsp3_preg;          -- A x b + a x B
                 else
-                    dsp0_preg <= dsp1_preg + resize(dsp0_mreg, c_c_w);         -- a x b + A x B
-                    dsp2_preg <= dsp3_preg - resize(dsp2_mreg, c_c_w);         -- a x B - A x b
+                    dsp0_preg <= dsp1_preg + resize(dsp0_mreg, c_c_w);          -- a x b + A x B
+                    dsp2_preg <= dsp3_preg - resize(dsp2_mreg, c_c_w);          -- a x B - A x b
                 end if;
             end if;
         end if;
@@ -233,11 +234,11 @@ begin
 --++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     blk_type_1 : block
 ----------------------------------------------------------------------------------------------------------------------------------
-        constant c_ad_a_w : integer := g_a_w + 1;                               -- preadder for A
-        constant c_ad_b_w : integer := g_b_w + 1;                               -- preadder for B
-        constant c_m0_w : integer := g_b_w + c_ad_a_w;                          -- mult for DSP0
-        constant c_m1_w : integer := g_a_w + c_ad_b_w;                          -- mult for DSP1
-        constant c_m2_w : integer := g_b_w + c_ad_a_w;                          -- mult for DSP0
+        constant c_ad_a_w : integer := g_a_dw + 1;                              -- preadder for A
+        constant c_ad_b_w : integer := g_b_dw + 1;                              -- preadder for B
+        constant c_m0_w : integer := g_b_dw + c_ad_a_w;                         -- mult for DSP0
+        constant c_m1_w : integer := g_a_dw + c_ad_b_w;                         -- mult for DSP1
+        constant c_m2_w : integer := g_b_dw + c_ad_a_w;                         -- mult for DSP0
 
         signal
               dsp0_areg1
@@ -246,7 +247,7 @@ begin
             , dsp1_breg2
             , dsp2_areg1
             , dsp2_dreg1
-                : signed(g_a_w - 1 downto 0) := (others => '0');
+                : signed(g_a_dw - 1 downto 0) := (others => '0');
         signal
               dsp0_breg1
             , dsp0_breg2
@@ -254,7 +255,7 @@ begin
             , dsp1_dreg1
             , dsp2_breg1
             , dsp2_breg2
-                : signed(g_b_w - 1 downto 0) := (others => '0');
+                : signed(g_b_dw - 1 downto 0) := (others => '0');
         signal
               dsp0_adreg
             , dsp2_adreg
@@ -326,11 +327,11 @@ begin
 --++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     blk_type_1_conj : block
 ----------------------------------------------------------------------------------------------------------------------------------
-        constant c_ad_a_w : integer := g_a_w + 1;                               -- preadder for A
-        constant c_ad_b_w : integer := g_b_w + 1;                               -- preadder for B
-        constant c_m0_w : integer := g_a_w + c_ad_b_w;                          -- mult for DSP0
-        constant c_m1_w : integer := g_b_w + c_ad_a_w;                          -- mult for DSP1
-        constant c_m2_w : integer := g_a_w + c_ad_b_w;                          -- mult for DSP0
+        constant c_ad_a_w : integer := g_a_dw + 1;                              -- preadder for A
+        constant c_ad_b_w : integer := g_b_dw + 1;                              -- preadder for B
+        constant c_m0_w : integer := g_a_dw + c_ad_b_w;                         -- mult for DSP0
+        constant c_m1_w : integer := g_b_dw + c_ad_a_w;                         -- mult for DSP1
+        constant c_m2_w : integer := g_a_dw + c_ad_b_w;                         -- mult for DSP0
 
         signal
               dsp0_breg1
@@ -339,7 +340,7 @@ begin
             , dsp1_dreg1
             , dsp2_breg1
             , dsp2_breg2
-                : signed(g_a_w - 1 downto 0) := (others => '0');
+                : signed(g_a_dw - 1 downto 0) := (others => '0');
         signal
               dsp0_areg1
             , dsp0_dreg1
@@ -347,7 +348,7 @@ begin
             , dsp1_breg2
             , dsp2_areg1
             , dsp2_dreg1
-                : signed(g_b_w - 1 downto 0) := (others => '0');
+                : signed(g_b_dw - 1 downto 0) := (others => '0');
         signal dsp1_adreg : signed(c_ad_a_w - 1 downto 0) := (others => '0');
         signal
               dsp0_adreg
@@ -417,8 +418,8 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
-    ovalid                              <= ob_v;
-    odata                               <=
+    oVALID                              <= ob_v;
+    oDATA                               <=
         ob_gp &
         std_logic_vector(ob_c.q) &
         std_logic_vector(ob_c.i)
