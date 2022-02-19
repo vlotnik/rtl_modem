@@ -2,14 +2,14 @@
 -- author : vitaly lotnik
 -- name : sin_cos_table
 -- created : 23/05/2019
--- v. 2.1.0
+-- v. 2.1.1
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, input:
 ----------------------------------------------------------------------------------------------------------------------------------
 -- g_iraxi_dw                           iDATA
 --      g_phase_dw                          phase                               [g_phase_dw - 1 : 0]
---      g_gp_dw                             general pupose data                 [g_gp_dw + g_phase_dw - 1 : g_phase_dw]
+--      g_gp_dw                             general purpose data                [g_gp_dw + g_phase_dw - 1 : g_phase_dw]
 --          g_gp_dw + g_phase_dw
 
 ----------------------------------------------------------------------------------------------------------------------------------
@@ -18,7 +18,7 @@
 -- g_oraxi_dw                           oDATA
 --      g_sincos_dw                         sinus                               [g_sincos_dw - 1 : 0]
 --      g_sincos_dw                         cosine                              [g_sincos_dw*2 - 1 : g_sincos_dw]
---      g_gp_dw                             general pupose data                 [g_gp_dw + g_sincos_dw*2 - 1 : g_sincos_dw*2]
+--      g_gp_dw                             general purpose data                [g_gp_dw + g_sincos_dw*2 - 1 : g_sincos_dw*2]
 --          g_gp_dw + g_sincos_dw*2
 ----------------------------------------------------------------------------------------------------------------------------------
 
