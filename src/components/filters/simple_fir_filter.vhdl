@@ -2,18 +2,21 @@
 -- author : vitaly lotnik
 -- name : simple_fir_filter
 -- created : 12/12/2021
--- v. 0.1.2
+-- v. 1.0.0
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, coef, input:
--- g_iraxi_dw_coef                      icoef_data
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_iraxi_dw_coef                      iCOEF_DATA
 --      g_coef_dw                           coefficient
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, data, input:
--- g_iraxi_dw                           idata
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_iraxi_dw                           iDATA
 --      g_sample_dw                         sample
 ----------------------------------------------------------------------------------------------------------------------------------
 -- raxi interface, data, output:
--- g_oraxi_dw                           odata
+----------------------------------------------------------------------------------------------------------------------------------
+-- g_oraxi_dw                           oDATA
 --      48                                  sample
 ----------------------------------------------------------------------------------------------------------------------------------
 
@@ -37,14 +40,14 @@ entity simple_fir_filter is
         ; g_oraxi_dw                    : integer := 48
     );
     port(
-          iclk                          : in std_logic
-        ; icoef_rst                     : in std_logic
-        ; icoef_valid                   : in std_logic
-        ; icoef_data                    : in std_logic_vector(g_iraxi_dw_coef - 1 downto 0)
-        ; ivalid                        : in std_logic
-        ; idata                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
-        ; ovalid                        : out std_logic
-        ; odata                         : out std_logic_vector(g_oraxi_dw - 1 downto 0)
+          iCLK                          : in std_logic
+        ; iCOEF_RST                     : in std_logic
+        ; iCOEF_VALID                   : in std_logic
+        ; iCOEF_DATA                    : in std_logic_vector(g_iraxi_dw_coef - 1 downto 0)
+        ; iVALID                        : in std_logic
+        ; iDATA                         : in std_logic_vector(g_iraxi_dw - 1 downto 0)
+        ; oVALID                        : out std_logic
+        ; oDATA                         : out std_logic_vector(g_oraxi_dw - 1 downto 0)
     );
 end;
 
@@ -93,18 +96,18 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- input
 ----------------------------------------------------------------------------------------------------------------------------------
-    ib_coef_rst                         <= icoef_rst;
-    ib_coef_valid                       <= icoef_valid;
-    ib_coef_data                        <= signed(icoef_data);
-    ib_valid                            <= ivalid;
-    ib_data                             <= signed(idata);
+    ib_coef_rst                         <= iCOEF_RST;
+    ib_coef_valid                       <= iCOEF_VALID;
+    ib_coef_data                        <= signed(iCOEF_DATA);
+    ib_valid                            <= iVALID;
+    ib_data                             <= signed(iDATA);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 -- process, set coefficients
 ----------------------------------------------------------------------------------------------------------------------------------
-    p_coefs : process(iclk)
+    p_coefs : process(iCLK)
     begin
-        if rising_edge(iclk) then
+        if rising_edge(iCLK) then
             if ib_coef_rst = '1' then
                 coefs_array <= (others => (others => '0'));
             else
@@ -118,9 +121,9 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- process, fir implementation
 ----------------------------------------------------------------------------------------------------------------------------------
-    p_fir : process(iclk)
+    p_fir : process(iCLK)
     begin
-        if rising_edge(iclk) then
+        if rising_edge(iCLK) then
             fir_breg <= coefs_array;
 
             if ib_valid = '1' then
@@ -150,8 +153,8 @@ begin
 ----------------------------------------------------------------------------------------------------------------------------------
 -- output
 ----------------------------------------------------------------------------------------------------------------------------------
-    ovalid                              <= ob_valid;
-    odata                               <= std_logic_vector(ob_data);
+    oVALID                              <= ob_valid;
+    oDATA                               <= std_logic_vector(ob_data);
 
 ----------------------------------------------------------------------------------------------------------------------------------
 end;
